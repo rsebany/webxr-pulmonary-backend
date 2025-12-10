@@ -1,0 +1,15 @@
+# Requirements pour les serverless functions Vercel
+# Copier les dépendances du backend
+fastapi
+uvicorn[standard]
+pydantic
+joblib
+numpy
+pydicom
+python-multipart
+python-jose[cryptography]
+bcrypt
+scikit-learn
+mangum
+requests
+

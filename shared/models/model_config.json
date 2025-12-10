@@ -1,0 +1,20 @@
+{
+    "feature_columns": [
+      "Weeks",
+      "Percent",
+      "Age",
+      "Week_scaled",
+      "FVC_mean",
+      "FVC_std",
+      "FVC_min",
+      "FVC_max",
+      "Weeks_count"
+    ],
+    "model_type": "RandomForest",
+    "input_shape": 9,
+    "training_date": "2025-11-25T20:23:08.764590",
+    "performance_metrics": {
+      "cv_mae_mean": 124.19595237330384,
+      "cv_r2_mean": 0.9538374136012042
+    }
+  }

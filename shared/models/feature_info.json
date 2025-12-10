@@ -1,0 +1,24 @@
+{
+    "feature_names": [
+      "Weeks",
+      "Percent",
+      "Age",
+      "Week_scaled",
+      "FVC_mean",
+      "FVC_std",
+      "FVC_min",
+      "FVC_max",
+      "Weeks_count"
+    ],
+    "feature_descriptions": {
+      "Weeks": "Temps en semaines depuis baseline",
+      "Percent": "Pourcentage FVC pr\u00e9dit normal",
+      "Age": "\u00c2ge du patient",
+      "Week_scaled": "Semaines normalis\u00e9es",
+      "FVC_mean": "FVC moyen du patient",
+      "FVC_std": "\u00c9cart-type FVC du patient",
+      "FVC_min": "FVC minimum du patient",
+      "FVC_max": "FVC maximum du patient",
+      "Weeks_count": "Nombre d'observations du patient"
+    }
+  }

@@ -24,6 +24,11 @@ app = FastAPI(title="Pulmonary Fibrosis WebXR API")
 # CORS pour WebXR
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=[
+        "http://pulmonary-webxr.ngita.mg/",  # Ton domaine cPanel
+        "http://localhost:3000",    # Développement local
+    ],
+    allow_credentials=True,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],

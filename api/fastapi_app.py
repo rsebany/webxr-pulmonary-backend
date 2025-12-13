@@ -29,12 +29,21 @@ GOOGLE_DRIVE_DOWNLOAD_URL = f"https://drive.google.com/uc?export=download&id={GO
 
 app = FastAPI(title="Pulmonary Fibrosis WebXR API")
 
-# CORS pour WebXR
+# CORS pour WebXR - Configuration complète pour production
+# Note: Si vous utilisez allow_credentials=True, vous ne pouvez pas utiliser "*" dans allow_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=[
+        "http://pulmonary-webxr.ngita.mg",
+        "https://pulmonary-webxr.ngita.mg",  # Si vous utilisez HTTPS plus tard
+        "http://localhost:3000",  # Pour le développement local
+        "http://localhost:5173",  # Port par défaut Vite
+    ],
+    allow_credentials=True,  # Nécessaire pour les cookies/auth si vous en utilisez
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 def download_model_from_google_drive(download_url: str, output_dir: str) -> bool:

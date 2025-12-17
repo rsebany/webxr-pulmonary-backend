@@ -1,4 +1,3 @@
-# backend/fastapi_app.py - VERSION CORRIGÉE
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -21,19 +20,34 @@ from auth import (
 
 app = FastAPI(title="Pulmonary Fibrosis WebXR API")
 
-# CORS pour WebXR
+# Définir les origines autorisées
+origins = [
+    "http://pulmonary-webxr.ngita.mg",
+    "https://pulmonary-webxr.ngita.mg",
+    "http://localhost:3000",
+    "http://localhost:5173",  # Vite/React
+    "http://127.0.0.1:3000",
+]
+
+# Obtenir des origines depuis les variables d'environnement (optionnel)
+env_origins = os.getenv("ALLOWED_ORIGINS", "")
+if env_origins:
+    origins.extend(env_origins.split(","))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://pulmonary-webxr.ngita.mg/",  # Ton domaine cPanel
-        "http://localhost:3000",    # Développement local
-    ],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
+        "*",
+        "Authorization",
+        "Content-Type",
+        "Access-Control-Allow-Headers",
+        "X-Requested-With",
+    ],
+    max_age=3600,  # Cache les pré-vérifications OPTIONS pendant 1 heure
 )
-
 # Créer le dossier models s'il n'existe pas
 # Support pour différents environnements (local, Vercel serverless)
 if os.path.exists("backend/models"):

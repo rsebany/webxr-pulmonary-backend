@@ -1,8 +1,8 @@
-# backend/fastapi_app.py - VERSION CORRIGÉE
+# backend/fastapi_app.py - VERSION CORRIGÉE ET COMPLÈTE
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import timedelta
 import joblib
 import numpy as np
@@ -21,18 +21,40 @@ from auth import (
 
 app = FastAPI(title="Pulmonary Fibrosis WebXR API")
 
-# CORS pour WebXR
+# Définir les origines autorisées
+origins = [
+    "http://pulmonary-webxr.ngita.mg",
+    "https://pulmonary-webxr.ngita.mg",
+    "http://localhost:3000",
+    "http://localhost:5173",  # Vite/React
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",  # Pour les tests locaux
+]
+
+# Obtenir des origines depuis les variables d'environnement (optionnel)
+env_origins = os.getenv("ALLOWED_ORIGINS", "")
+if env_origins:
+    origins.extend(env_origins.split(","))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://pulmonary-webxr.ngita.mg/",  # Ton domaine cPanel
-        "http://localhost:3000",    # Développement local
-    ],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
+        "*",
+        "Authorization",
+        "Content-Type",
+        "Access-Control-Allow-Headers",
+        "X-Requested-With",
+    ],
+    max_age=3600,  # Cache les pré-vérifications OPTIONS pendant 1 heure
 )
+
+# Gestionnaire OPTIONS global pour CORS pré-flight
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return {"status": "OK"}
 
 # Créer le dossier models s'il n'existe pas
 # Support pour différents environnements (local, Vercel serverless)
@@ -45,7 +67,7 @@ elif os.path.exists("api/models"):
 else:
     MODELS_DIR = "models"
     if not os.path.exists(MODELS_DIR):
-        os.makedirs(MODELS_DIR)
+        os.makedirs(MODELS_DIR, exist_ok=True)
         print(f"📁 Dossier '{MODELS_DIR}' créé")
 
 # Charger ou créer le modèle
@@ -55,6 +77,7 @@ try:
     model = joblib.load(model_path)
     scaler = joblib.load(scaler_path)
     print("✅ Modèle et scaler chargés avec succès")
+    MODEL_LOADED = True
 except FileNotFoundError:
     print("📝 Création de modèles de démonstration...")
     
@@ -93,11 +116,16 @@ except FileNotFoundError:
     joblib.dump(model, model_path)
     joblib.dump(scaler, scaler_path)
     print("✅ Modèles de démonstration créés et sauvegardés")
+    MODEL_LOADED = True
     
 except Exception as e:
     print(f"❌ Erreur inattendue: {e}")
-    raise
+    MODEL_LOADED = False
+    # Créer des modèles factices pour éviter les crashes
+    model = RandomForestRegressor()
+    scaler = StandardScaler()
 
+# Modèles Pydantic
 class PredictionRequest(BaseModel):
     weeks: float
     percent: float
@@ -109,6 +137,13 @@ class DicomData(BaseModel):
     patient_id: str
     dicom_slices: List[str]
 
+class HealthResponse(BaseModel):
+    status: str
+    model_loaded: bool
+    timestamp: str
+
+# ==================== ENDPOINTS PUBLICS ====================
+
 @app.get("/")
 async def root():
     return {
@@ -119,24 +154,29 @@ async def root():
             "predict": "/predict (POST)",
             "analyze_dicom": "/analyze-dicom (POST)", 
             "patient_history": "/patient-history/{patient_id} (GET)",
-            "docs": "/docs"
+            "docs": "/docs",
+            "redoc": "/redoc"
         }
     }
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 async def health_check():
     return {
         "status": "healthy", 
-        "model_loaded": True,
+        "model_loaded": MODEL_LOADED,
         "timestamp": np.datetime64('now').astype(str)
     }
+
+@app.get("/ping")
+async def ping():
+    return {"message": "pong", "status": "OK"}
 
 # ==================== AUTHENTIFICATION ====================
 
 @app.post("/auth/login", response_model=Token)
 async def login(user_data: UserLogin):
     """Connexion utilisateur"""
-    user = authenticate_user(user_data.username, user_data.password)
+    user = authenticate_user(fake_users_db, user_data.username, user_data.password)
     if not user:
         raise HTTPException(
             status_code=401,
@@ -145,7 +185,7 @@ async def login(user_data: UserLogin):
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["username"], "role": user["role"]},
+        data={"sub": user.username, "role": user.role},
         expires_delta=access_token_expires
     )
     
@@ -153,10 +193,10 @@ async def login(user_data: UserLogin):
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
-            "username": user["username"],
-            "full_name": user["full_name"],
-            "role": user["role"],
-            "patient_id": user.get("patient_id")
+            "username": user.username,
+            "full_name": user.full_name,
+            "role": user.role,
+            "patient_id": getattr(user, "patient_id", None)
         }
     }
 
@@ -166,16 +206,20 @@ async def register(user_data: UserCreate):
     if user_data.username in fake_users_db:
         raise HTTPException(status_code=400, detail="Nom d'utilisateur déjà pris")
     
-    fake_users_db[user_data.username] = {
+    hashed_password = get_password_hash(user_data.password)
+    
+    user_info = {
         "username": user_data.username,
         "full_name": user_data.full_name,
         "role": user_data.role,
-        "hashed_password": get_password_hash(user_data.password),
+        "hashed_password": hashed_password,
         "disabled": False
     }
     
     if user_data.role == "patient":
-        fake_users_db[user_data.username]["patient_id"] = f"ID{user_data.username.upper()}"
+        user_info["patient_id"] = f"ID{user_data.username.upper()}"
+    
+    fake_users_db[user_data.username] = user_info
     
     return {"message": "Utilisateur créé avec succès", "username": user_data.username}
 
@@ -183,10 +227,10 @@ async def register(user_data: UserCreate):
 async def get_me(current_user: dict = Depends(get_current_active_user)):
     """Récupère les infos de l'utilisateur connecté"""
     return {
-        "username": current_user["username"],
-        "full_name": current_user["full_name"],
-        "role": current_user["role"],
-        "patient_id": current_user.get("patient_id")
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "patient_id": getattr(current_user, "patient_id", None)
     }
 
 # ==================== ROUTES MÉDECIN ====================
@@ -209,7 +253,7 @@ async def get_all_patients(current_user: dict = Depends(require_role("medecin"))
 @app.get("/patient/my-data")
 async def get_my_data(current_user: dict = Depends(require_role("patient"))):
     """Récupère les données du patient connecté"""
-    patient_id = current_user.get("patient_id", current_user["username"])
+    patient_id = getattr(current_user, "patient_id", current_user.username)
     
     # Simuler les données du patient
     base_fvc = 2800
@@ -221,7 +265,7 @@ async def get_my_data(current_user: dict = Depends(require_role("patient"))):
     
     return {
         "patient_id": patient_id,
-        "full_name": current_user["full_name"],
+        "full_name": current_user.full_name,
         "age": 58,
         "baseline_fvc": base_fvc,
         "fvc_history": history
@@ -231,6 +275,9 @@ async def get_my_data(current_user: dict = Depends(require_role("patient"))):
 async def predict_fvc(request: PredictionRequest):
     """Prédiction FVC à partir des features tabulaires"""
     try:
+        if not MODEL_LOADED:
+            raise HTTPException(status_code=503, detail="Modèle non chargé")
+        
         features = np.array([[request.weeks, request.percent, request.age, 
                              request.fvc_mean, request.fvc_std]])
         
@@ -301,7 +348,7 @@ async def analyze_dicom(file: UploadFile = File(...)):
             "data": volume_list,
             "hu_range": [int(pixel_array.min()), int(pixel_array.max())],
             "radiomic_features": features,
-            "patient_id": getattr(dicom_dataset, 'PatientID', 'unknown'),
+            "patient_id": str(getattr(dicom_dataset, 'PatientID', 'unknown')),
             "file_name": file.filename,
             "status": "success"
         }
@@ -332,17 +379,18 @@ async def analyze_dicom_volume(files: List[UploadFile] = File(...)):
             pixel_array = dicom_dataset.pixel_array
             
             # Récupérer la position de la slice si disponible
+            slice_location = len(slices)  # Valeur par défaut
             try:
-                slice_location = float(dicom_dataset.SliceLocation)
-            except:
-                try:
+                if hasattr(dicom_dataset, 'SliceLocation'):
+                    slice_location = float(dicom_dataset.SliceLocation)
+                elif hasattr(dicom_dataset, 'ImagePositionPatient'):
                     slice_location = float(dicom_dataset.ImagePositionPatient[2])
-                except:
-                    slice_location = len(slices)
+            except:
+                pass
             
             # Récupérer le Patient ID
-            if patient_id == "unknown":
-                patient_id = getattr(dicom_dataset, 'PatientID', 'unknown')
+            if patient_id == "unknown" and hasattr(dicom_dataset, 'PatientID'):
+                patient_id = str(dicom_dataset.PatientID)
             
             # Prétraitement de la slice
             processed_slice = preprocess_dicom_slice(pixel_array)
@@ -414,16 +462,21 @@ async def get_patient_history(patient_id: str):
     try:
         # Simulation de données réalistes
         base_fvc = 3000
-        if patient_id.replace('_', '').isdigit():
-            base_fvc = 2500 + (int(patient_id.replace('_', '')) % 10) * 100
+        
+        # Créer un hash simple pour le patient
+        patient_hash = 0
+        for char in patient_id:
+            patient_hash = (patient_hash * 31 + ord(char)) % 1000
+        
+        base_fvc = 2500 + patient_hash % 500
         
         history = []
         for week in range(0, 60, 12):
-            degradation = week * 8 + (hash(patient_id) % 20)
+            degradation = week * 8 + patient_hash % 20
             fvc = max(1500, base_fvc - degradation)
             history.append({"week": week, "fvc": int(fvc)})
         
-        age = 50 + (sum(ord(c) for c in patient_id) % 30)
+        age = 50 + patient_hash % 30
         
         return {
             "patient_id": patient_id,
@@ -444,13 +497,28 @@ def preprocess_dicom_slice(slice_array):
 
 def extract_radiomic_features(processed_array):
     """Extraction de features radiomiques basiques"""
+    flat_array = processed_array.flatten()
     return {
-        "mean": float(np.mean(processed_array)),
-        "std": float(np.std(processed_array)),
-        "min": float(np.min(processed_array)),
-        "max": float(np.max(processed_array)),
-        "percentile_25": float(np.percentile(processed_array, 25)),
-        "percentile_75": float(np.percentile(processed_array, 75)),
+        "mean": float(np.mean(flat_array)),
+        "std": float(np.std(flat_array)),
+        "min": float(np.min(flat_array)),
+        "max": float(np.max(flat_array)),
+        "percentile_25": float(np.percentile(flat_array, 25)),
+        "percentile_50": float(np.percentile(flat_array, 50)),
+        "percentile_75": float(np.percentile(flat_array, 75)),
+        "skewness": float(float(np.mean((flat_array - np.mean(flat_array))**3)) / (np.std(flat_array)**3)),
+        "kurtosis": float(float(np.mean((flat_array - np.mean(flat_array))**4)) / (np.std(flat_array)**4)),
     }
 
-# NE PAS UTILISER __main__ avec reload - utiliser directement uvicorn en ligne de commande
+# Pour exécuter en local (à utiliser seulement en développement local)
+if __name__ == "__main__":
+    import uvicorn
+    print("🚀 Démarrage de l'API FastAPI...")
+    print(f"📡 Accédez à: http://localhost:8000")
+    print(f"📚 Documentation: http://localhost:8000/docs")
+    uvicorn.run(
+        "fastapi_app:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True  # Active le reload en développement seulement
+    )

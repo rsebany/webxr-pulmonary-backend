@@ -6,6 +6,6 @@ numpy
 pydicom
 python-multipart
 python-jose[cryptography]
-bcrypt
+passlib[bcrypt]
 scikit-learn
 

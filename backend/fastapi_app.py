@@ -271,6 +271,8 @@ async def get_my_data(current_user: dict = Depends(require_role("patient"))):
         "fvc_history": history
     }
 
+# ==================== PRÉDICTIONS ====================
+
 @app.post("/predict")
 async def predict_fvc(request: PredictionRequest):
     """Prédiction FVC à partir des features tabulaires"""
@@ -298,6 +300,8 @@ async def predict_fvc(request: PredictionRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur de prédiction: {str(e)}")
+
+# ==================== ANALYSE DICOM ====================
 
 @app.post("/analyze-dicom")
 async def analyze_dicom(file: UploadFile = File(...)):
@@ -489,7 +493,7 @@ async def get_patient_history(patient_id: str):
         raise HTTPException(status_code=500, detail=f"Erreur historique: {str(e)}")
 
 def preprocess_dicom_slice(slice_array):
-    """Même preprocessing que dans Kaggle"""
+    """Prétraitement des slices DICOM"""
     slice_array = slice_array.astype(np.float32)
     slice_array = np.clip(slice_array, -1000, 400)
     slice_array = (slice_array + 1000) / 1400

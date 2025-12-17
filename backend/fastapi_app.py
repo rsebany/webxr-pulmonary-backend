@@ -503,26 +503,12 @@ def extract_radiomic_features(processed_array):
     """Extraction de features radiomiques basiques"""
     flat_array = processed_array.flatten()
     return {
-        "mean": float(np.mean(flat_array)),
-        "std": float(np.std(flat_array)),
-        "min": float(np.min(flat_array)),
-        "max": float(np.max(flat_array)),
-        "percentile_25": float(np.percentile(flat_array, 25)),
-        "percentile_50": float(np.percentile(flat_array, 50)),
-        "percentile_75": float(np.percentile(flat_array, 75)),
-        "skewness": float(float(np.mean((flat_array - np.mean(flat_array))**3)) / (np.std(flat_array)**3)),
-        "kurtosis": float(float(np.mean((flat_array - np.mean(flat_array))**4)) / (np.std(flat_array)**4)),
+        "mean": float(np.mean(processed_array)),
+        "std": float(np.std(processed_array)),
+        "min": float(np.min(processed_array)),
+        "max": float(np.max(processed_array)),
+        "percentile_25": float(np.percentile(processed_array, 25)),
+        "percentile_75": float(np.percentile(processed_array, 75)),
     }
 
-# Pour exécuter en local (à utiliser seulement en développement local)
-if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Démarrage de l'API FastAPI...")
-    print(f"📡 Accédez à: http://localhost:8000")
-    print(f"📚 Documentation: http://localhost:8000/docs")
-    uvicorn.run(
-        "fastapi_app:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True  # Active le reload en développement seulement
-    )
+# NE PAS UTILISER __main__ avec reload - utiliser directement uvicorn en ligne de commande

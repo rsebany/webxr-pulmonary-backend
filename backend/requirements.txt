@@ -8,4 +8,5 @@ python-multipart
 python-jose[cryptography]
 passlib[bcrypt]
 scikit-learn
+asgiref
 

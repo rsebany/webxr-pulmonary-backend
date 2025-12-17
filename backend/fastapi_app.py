@@ -525,4 +525,8 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=True  # Active le reload en développement seulement
+<<<<<<< HEAD
     )
+=======
+    )
+>>>>>>> a093971a2e95b6d2eafbd296c3754971971f9957
